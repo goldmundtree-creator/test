@@ -1,0 +1,18 @@
+# Downloaded images (large binary files, don't commit)
+dental_images/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+.venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
