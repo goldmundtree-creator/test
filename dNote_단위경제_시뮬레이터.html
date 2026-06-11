@@ -91,6 +91,8 @@
       <input type="range" id="churn" min="1" max="8" step="0.5"></div>
     <div class="ctrl"><label>매출총이익률 <span class="val" id="gm_v"></span></label>
       <input type="range" id="gm" min="40" max="90" step="5"></div>
+    <div class="ctrl"><label>포인트 실원가 (원/P) <span class="val" id="prate_v"></span></label>
+      <input type="range" id="prate" min="0" max="1" step="0.05"></div>
 
     <h2>획득 경로</h2>
     <div class="ctrl"><label>선도 도입 구간</label>
@@ -110,7 +112,7 @@
         <option value="yes">초대받은 치과 (감사P 발생)</option>
         <option value="no">비초대 (감사P 없음)</option>
       </select></div>
-    <div class="note">체험P 10,000 · 전환보너스 10,000 · 마이크 20,000원은 고정 변동비로 포함됩니다.</div>
+    <div class="note">마이크 20,000원은 실물(현금). 체험P·전환보너스·감사P는 <b>포인트(P)</b>이며 위 '포인트 실원가'로 환산해 획득비에 반영됩니다.</div>
   </div>
 
   <!-- ============ RESULTS ============ -->
@@ -153,9 +155,10 @@ const TIERS = {
   t3:  {price:39800, guar:12, thanks:40000,  label:"701~1000곳"},
 };
 const CAC = {off:600000, on:150000};
-const FIXED = 10000 + 10000 + 20000; // 체험P + 전환보너스 + 마이크
+const MIC = 20000;               // 실물 마이크 (현금, 원)
+const PTS_FIXED = 10000 + 10000; // 체험P + 전환보너스 (포인트 단위)
 
-const ids = ["leads","apply","install","first","active","paid","kf","churn","gm"];
+const ids = ["leads","apply","install","first","active","paid","kf","churn","gm","prate"];
 const fmt = n => Math.round(n).toLocaleString("ko-KR");
 const won = n => "₩" + fmt(n);
 
@@ -164,17 +167,18 @@ function read(){
   return {
     leads:g("leads"), apply:g("apply")/100, install:g("install")/100,
     first:g("first")/100, active:g("active")/100, paid:g("paid")/100,
-    kf:g("kf"), churn:g("churn")/100, gm:g("gm")/100,
+    kf:g("kf"), churn:g("churn")/100, gm:g("gm")/100, prate:g("prate"),
     tier:document.getElementById("tier").value,
     channel:document.getElementById("channel").value,
     invite:document.getElementById("invite").value,
   };
 }
 
-function acqCost(tierKey, channel, invite){
+function acqCost(tierKey, channel, invite, prate){
   const t = TIERS[tierKey];
-  const thanks = invite==="yes" ? t.thanks : 0;
-  return CAC[channel] + thanks + FIXED;
+  const thanksP = invite==="yes" ? t.thanks : 0;   // 감사P (포인트)
+  const points = thanksP + PTS_FIXED;              // 포인트 합계 (P)
+  return CAC[channel] + MIC + points * prate;      // 현금(CAC+마이크) + 포인트환산
 }
 
 function verdict(payback, guar){
@@ -195,6 +199,7 @@ function render(){
   document.getElementById("kf_v").textContent = s.kf.toFixed(2);
   document.getElementById("churn_v").textContent = (s.churn*100).toFixed(1)+"%";
   document.getElementById("gm_v").textContent = (s.gm*100).toFixed(0)+"%";
+  document.getElementById("prate_v").textContent = s.prate.toFixed(2)+"원/P";
 
   // funnel
   const stages = [
@@ -224,7 +229,9 @@ function render(){
 
   // unit economics (selected path)
   const t = TIERS[s.tier];
-  const cost = acqCost(s.tier, s.channel, s.invite);
+  const cost = acqCost(s.tier, s.channel, s.invite, s.prate);
+  const thanksP = s.invite==="yes" ? t.thanks : 0;
+  const ptsTotal = thanksP + PTS_FIXED;
   const contrib = t.price * s.gm;
   const payback = cost / contrib;
   const ltv = contrib / s.churn;              // 기대수명 = 1/이탈
@@ -232,7 +239,7 @@ function render(){
 
   document.getElementById("u_cac").textContent = won(cost);
   document.getElementById("u_cac_s").textContent =
-    "CAC "+won(CAC[s.channel])+(s.invite==="yes"?" +감사P "+won(t.thanks):"")+" +고정 "+won(FIXED);
+    "CAC "+won(CAC[s.channel])+" +마이크 "+won(MIC)+" +포인트 "+fmt(ptsTotal)+"P×"+s.prate.toFixed(2)+"="+won(ptsTotal*s.prate);
   document.getElementById("u_contrib").textContent = won(contrib)+"/월";
   document.getElementById("u_contrib_s").textContent = "월"+fmt(t.price)+" × "+(s.gm*100).toFixed(0)+"%";
 
@@ -252,7 +259,7 @@ function render(){
   const rows=[];
   for(const tk of Object.keys(TIERS)){
     for(const ch of ["off","on"]){
-      const tt=TIERS[tk], c=acqCost(tk,ch,"yes"), ctr=tt.price*s.gm, pbk=c/ctr;
+      const tt=TIERS[tk], c=acqCost(tk,ch,"yes",s.prate), ctr=tt.price*s.gm, pbk=c/ctr;
       const v=verdict(pbk,tt.guar);
       rows.push(`<tr><td>${tt.label} · ${ch==="off"?"오프라인":"온라인"}</td>
         <td>${won(c)}</td><td>${won(ctr)}</td><td>${pbk.toFixed(1)}</td>
@@ -263,8 +270,8 @@ function render(){
 }
 
 const PRESETS = {
-  challenge:{leads:7500,apply:25,install:80,first:80,active:60,paid:40,kf:0.28,churn:3,gm:70},
-  conserv:  {leads:7500,apply:20,install:60,first:80,active:50,paid:30,kf:0.18,churn:4,gm:65},
+  challenge:{leads:7500,apply:25,install:80,first:80,active:60,paid:40,kf:0.28,churn:3,gm:70,prate:0.3},
+  conserv:  {leads:7500,apply:20,install:60,first:80,active:50,paid:30,kf:0.18,churn:4,gm:65,prate:0.3},
 };
 function applyPreset(name){
   const p=PRESETS[name];
