@@ -104,8 +104,8 @@
       </select></div>
     <div class="ctrl"><label>채널 (CAC)</label>
       <select id="channel">
-        <option value="off">오프라인 필드 (CAC 60만)</option>
-        <option value="on">온라인 셀프 (CAC 15만)</option>
+        <option value="off">오프라인 필드 (CAC 53만)</option>
+        <option value="on">온라인 셀프 (CAC 12만)</option>
       </select></div>
     <div class="ctrl"><label>초대 경로 여부</label>
       <select id="invite">
@@ -113,6 +113,13 @@
         <option value="no">비초대 (감사P 없음)</option>
       </select></div>
     <div class="note">마이크 20,000원은 실물(현금). 체험P·전환보너스·감사P는 <b>포인트(P)</b>이며 위 '포인트 실원가'로 환산해 획득비에 반영됩니다.</div>
+
+    <h2>블렌디드 가정 (전체 1,000곳)</h2>
+    <div class="ctrl"><label>오프라인 획득 비중 <span class="val" id="offshare_v"></span></label>
+      <input type="range" id="offshare" min="0" max="60" step="1"></div>
+    <div class="ctrl"><label>초대 경로 비중 <span class="val" id="invshare_v"></span></label>
+      <input type="range" id="invshare" min="0" max="100" step="1"></div>
+    <div class="note">블렌디드 카드는 감사P <b>구간가중 평균 96,000P</b>·가격 평균 36,300원을 사용합니다.</div>
   </div>
 
   <!-- ============ RESULTS ============ -->
@@ -135,6 +142,14 @@
       <div class="card"><div class="k">LTV / CAC</div><div class="v" id="u_ltvcac"></div><div class="s" id="u_ltvcac_s"></div></div>
     </div>
 
+    <h2>블렌디드 (전체 1,000곳 평균)</h2>
+    <div class="cards">
+      <div class="card"><div class="k">블렌디드 CAC</div><div class="v" id="b_cac"></div><div class="s" id="b_cac_s"></div></div>
+      <div class="card"><div class="k">블렌디드 월기여</div><div class="v" id="b_contrib"></div><div class="s" id="b_contrib_s"></div></div>
+      <div class="card"><div class="k">블렌디드 회수개월</div><div class="v" id="b_payback"></div><div class="s" id="b_payback_s"></div></div>
+      <div class="card"><div class="k">블렌디드 LTV / CAC</div><div class="v" id="b_ltvcac"></div><div class="s" id="b_ltvcac_s"></div></div>
+    </div>
+
     <h2>구간 × 채널 회수 비교</h2>
     <table id="matrix">
       <thead><tr><th>구간 / 채널</th><th>획득비</th><th>월기여</th><th>회수개월</th><th>보장기간</th><th>판정</th></tr></thead>
@@ -154,11 +169,13 @@ const TIERS = {
   t2:  {price:34800, guar:24, thanks:110000, label:"201~400곳"},
   t3:  {price:39800, guar:12, thanks:40000,  label:"701~1000곳"},
 };
-const CAC = {off:600000, on:150000};
+const CAC = {off:530000, on:120000};   // v8.0 예산 역산: 오프라인 9천만÷120~220곳 중앙 53만 / 온라인 셀프 12만
 const MIC = 20000;               // 실물 마이크 (현금, 원)
 const PTS_FIXED = 10000 + 10000; // 체험P + 전환보너스 (포인트 단위)
+const AVG_THANKS = 96000;        // 감사P 구간가중 평균 (96,000,000P ÷ 1,000곳, §16.2)
+const AVG_PRICE = 36300;         // 가격 구간가중 평균 (§15.1: 200@29.8k+300@34.8k+500@39.8k)
 
-const ids = ["leads","apply","install","first","active","paid","kf","churn","gm","prate"];
+const ids = ["leads","apply","install","first","active","paid","kf","churn","gm","prate","offshare","invshare"];
 const fmt = n => Math.round(n).toLocaleString("ko-KR");
 const won = n => "₩" + fmt(n);
 
@@ -168,6 +185,7 @@ function read(){
     leads:g("leads"), apply:g("apply")/100, install:g("install")/100,
     first:g("first")/100, active:g("active")/100, paid:g("paid")/100,
     kf:g("kf"), churn:g("churn")/100, gm:g("gm")/100, prate:g("prate"),
+    offshare:g("offshare")/100, invshare:g("invshare")/100,
     tier:document.getElementById("tier").value,
     channel:document.getElementById("channel").value,
     invite:document.getElementById("invite").value,
@@ -200,6 +218,8 @@ function render(){
   document.getElementById("churn_v").textContent = (s.churn*100).toFixed(1)+"%";
   document.getElementById("gm_v").textContent = (s.gm*100).toFixed(0)+"%";
   document.getElementById("prate_v").textContent = s.prate.toFixed(2)+"원/P";
+  document.getElementById("offshare_v").textContent = (s.offshare*100).toFixed(0)+"%";
+  document.getElementById("invshare_v").textContent = (s.invshare*100).toFixed(0)+"%";
 
   // funnel
   const stages = [
@@ -267,11 +287,32 @@ function render(){
     }
   }
   document.querySelector("#matrix tbody").innerHTML = rows.join("");
+
+  // blended (전체 1,000곳 평균)
+  const bChannel = s.offshare*CAC.off + (1-s.offshare)*CAC.on;        // 채널노동 가중평균
+  const bPoints  = (PTS_FIXED + s.invshare*AVG_THANKS) * s.prate;     // 감사P는 초대비중만, 구간가중 평균
+  const bCost    = bChannel + MIC + bPoints;
+  const bContrib = AVG_PRICE * s.gm;
+  const bPayback = bCost / bContrib;
+  const bLtv     = bContrib / s.churn;
+  const bLtvcac  = bLtv / bCost;
+
+  document.getElementById("b_cac").textContent = won(bCost);
+  document.getElementById("b_cac_s").textContent =
+    "채널 "+won(bChannel)+" +마이크 "+won(MIC)+" +포인트 "+won(bPoints);
+  document.getElementById("b_contrib").textContent = won(bContrib)+"/월";
+  document.getElementById("b_contrib_s").textContent = "평균가 "+fmt(AVG_PRICE)+" × "+(s.gm*100).toFixed(0)+"%";
+  document.getElementById("b_payback").textContent = bPayback.toFixed(1)+"개월";
+  document.getElementById("b_payback_s").textContent = "오프 "+(s.offshare*100).toFixed(0)+"%·초대 "+(s.invshare*100).toFixed(0)+"% 가정";
+  const blc = document.getElementById("b_ltvcac");
+  blc.textContent = bLtvcac.toFixed(2)+"×";
+  blc.className = "v "+(bLtvcac>=3?"good":bLtvcac>=1.5?"warn":"bad");
+  document.getElementById("b_ltvcac_s").textContent = "LTV "+won(bLtv);
 }
 
 const PRESETS = {
-  challenge:{leads:7500,apply:25,install:80,first:80,active:60,paid:40,kf:0.28,churn:3,gm:70,prate:0.3},
-  conserv:  {leads:7500,apply:20,install:60,first:80,active:50,paid:30,kf:0.18,churn:4,gm:65,prate:0.3},
+  challenge:{leads:7500,apply:25,install:80,first:80,active:60,paid:40,kf:0.28,churn:3,gm:70,prate:0.7,offshare:17,invshare:60},
+  conserv:  {leads:7500,apply:20,install:60,first:80,active:50,paid:30,kf:0.18,churn:4,gm:65,prate:0.7,offshare:25,invshare:55},
 };
 function applyPreset(name){
   const p=PRESETS[name];
