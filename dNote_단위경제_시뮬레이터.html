@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dNote 선도 도입 1000 · 단위경제 & 깔때기 시뮬레이터</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171c23; --panel2:#1e252e; --line:#2a323d;
+    --txt:#e6ebf1; --muted:#94a3b8; --accent:#4f9cf9; --good:#34d399;
+    --warn:#fbbf24; --bad:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;
+    line-height:1.5;font-size:14px}
+  header{padding:20px 24px;border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:18px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .wrap{display:grid;grid-template-columns:340px 1fr;gap:0;min-height:calc(100vh - 70px)}
+  @media(max-width:880px){.wrap{grid-template-columns:1fr}}
+  .controls{padding:18px 20px;border-right:1px solid var(--line);background:var(--panel)}
+  .results{padding:18px 24px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+    margin:22px 0 10px;font-weight:600}
+  h2:first-child{margin-top:0}
+  .ctrl{margin-bottom:14px}
+  .ctrl label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+  .ctrl label .val{color:var(--accent);font-variant-numeric:tabular-nums;font-weight:600}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  select{width:100%;background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:6px;padding:7px 8px;font-size:13px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card .k{font-size:12px;color:var(--muted)}
+  .card .v{font-size:24px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+  .card .s{font-size:12px;color:var(--muted);margin-top:2px}
+  .v.good{color:var(--good)} .v.warn{color:var(--warn)} .v.bad{color:var(--bad)}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600}
+  .funnel-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .funnel-bar{height:26px;border-radius:5px;background:linear-gradient(90deg,#3b6fb0,#4f9cf9);
+    min-width:2px;transition:width .15s;display:flex;align-items:center;padding:0 8px;
+    font-size:12px;color:#fff;font-weight:600;white-space:nowrap}
+  .funnel-label{width:120px;font-size:12px;color:var(--muted)}
+  .pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
+  .pill.good{background:rgba(52,211,153,.15);color:var(--good)}
+  .pill.warn{background:rgba(251,191,36,.15);color:var(--warn)}
+  .pill.bad{background:rgba(248,113,113,.15);color:var(--bad)}
+  .note{color:var(--muted);font-size:12px;margin-top:10px}
+  .preset{display:flex;gap:8px;margin-bottom:14px}
+  .preset button{flex:1;background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:6px;padding:7px;font-size:12px;cursor:pointer}
+  .preset button:hover{border-color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>dNote 선도 도입 1000 · 단위경제 &amp; 깔때기 시뮬레이터</h1>
+  <p>가정을 조정하면 깔때기 결과 · 회수개월 · LTV/CAC가 즉시 계산됩니다. 외부 연결 없이 동작.</p>
+</header>
+
+<div class="wrap">
+  <!-- ============ CONTROLS ============ -->
+  <div class="controls">
+    <div class="preset">
+      <button onclick="applyPreset('challenge')">도전 시나리오</button>
+      <button onclick="applyPreset('conserv')">보수 시나리오</button>
+    </div>
+
+    <h2>유입 &amp; 깔때기</h2>
+    <div class="ctrl"><label>리드 총량 <span class="val" id="leads_v"></span></label>
+      <input type="range" id="leads" min="2000" max="20000" step="500"></div>
+    <div class="ctrl"><label>체험 신청률 <span class="val" id="apply_v"></span></label>
+      <input type="range" id="apply" min="10" max="50" step="1"></div>
+    <div class="ctrl"><label>설치율 <span class="val" id="install_v"></span></label>
+      <input type="range" id="install" min="40" max="95" step="1"></div>
+    <div class="ctrl"><label>첫 요약 성공률 <span class="val" id="first_v"></span></label>
+      <input type="range" id="first" min="50" max="95" step="1"></div>
+    <div class="ctrl"><label>누적 40분 활성률 <span class="val" id="active_v"></span></label>
+      <input type="range" id="active" min="30" max="85" step="1"></div>
+    <div class="ctrl"><label>유료전환율 <span class="val" id="paid_v"></span></label>
+      <input type="range" id="paid" min="15" max="60" step="1"></div>
+    <div class="ctrl"><label>재초대 K-factor <span class="val" id="kf_v"></span></label>
+      <input type="range" id="kf" min="0" max="0.6" step="0.01"></div>
+
+    <h2>단위경제 가정</h2>
+    <div class="ctrl"><label>월 이탈률 <span class="val" id="churn_v"></span></label>
+      <input type="range" id="churn" min="1" max="8" step="0.5"></div>
+    <div class="ctrl"><label>매출총이익률 <span class="val" id="gm_v"></span></label>
+      <input type="range" id="gm" min="40" max="90" step="5"></div>
+
+    <h2>획득 경로</h2>
+    <div class="ctrl"><label>선도 도입 구간</label>
+      <select id="tier">
+        <option value="t1">1~50곳 · 월29,800 · 36개월 · 감사P 240k</option>
+        <option value="t1b">101~200곳 · 월29,800 · 36개월 · 감사P 160k</option>
+        <option value="t2">201~400곳 · 월34,800 · 24개월 · 감사P 110k</option>
+        <option value="t3">701~1000곳 · 월39,800 · 12개월 · 감사P 40k</option>
+      </select></div>
+    <div class="ctrl"><label>채널 (CAC)</label>
+      <select id="channel">
+        <option value="off">오프라인 필드 (CAC 60만)</option>
+        <option value="on">온라인 셀프 (CAC 15만)</option>
+      </select></div>
+    <div class="ctrl"><label>초대 경로 여부</label>
+      <select id="invite">
+        <option value="yes">초대받은 치과 (감사P 발생)</option>
+        <option value="no">비초대 (감사P 없음)</option>
+      </select></div>
+    <div class="note">체험P 10,000 · 전환보너스 10,000 · 마이크 20,000원은 고정 변동비로 포함됩니다.</div>
+  </div>
+
+  <!-- ============ RESULTS ============ -->
+  <div class="results">
+    <h2>깔때기 (리드 → Retained Active)</h2>
+    <div id="funnel"></div>
+
+    <h2>1,000곳 목표 대비</h2>
+    <div class="cards">
+      <div class="card"><div class="k">유료전환 (직접)</div><div class="v" id="r_paid"></div><div class="s">재초대 증폭 전</div></div>
+      <div class="card"><div class="k">Retained Active (K 증폭 후)</div><div class="v" id="r_ret"></div><div class="s" id="r_ret_s"></div></div>
+      <div class="card"><div class="k">목표 1,000 달성</div><div class="v" id="r_goal"></div><div class="s" id="r_goal_s"></div></div>
+    </div>
+
+    <h2>유입 1곳당 단위경제</h2>
+    <div class="cards">
+      <div class="card"><div class="k">획득비용</div><div class="v" id="u_cac"></div><div class="s" id="u_cac_s"></div></div>
+      <div class="card"><div class="k">월 기여이익</div><div class="v" id="u_contrib"></div><div class="s" id="u_contrib_s"></div></div>
+      <div class="card"><div class="k">회수 개월</div><div class="v" id="u_payback"></div><div class="s" id="u_payback_s"></div></div>
+      <div class="card"><div class="k">LTV / CAC</div><div class="v" id="u_ltvcac"></div><div class="s" id="u_ltvcac_s"></div></div>
+    </div>
+
+    <h2>구간 × 채널 회수 비교</h2>
+    <table id="matrix">
+      <thead><tr><th>구간 / 채널</th><th>획득비</th><th>월기여</th><th>회수개월</th><th>보장기간</th><th>판정</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="note">
+      회수개월 = 획득비 ÷ (월가격 × 매출총이익률). LTV = 월기여 ÷ 월이탈률.
+      Retained = 유료전환 × 1/(1−K). 판정: 회수 ≤ 보장기간×0.7 🟢 / ≤ 보장기간 🟡 / 초과 🔴.
+    </div>
+  </div>
+</div>
+
+<script>
+const TIERS = {
+  t1:  {price:29800, guar:36, thanks:240000, label:"1~50곳"},
+  t1b: {price:29800, guar:36, thanks:160000, label:"101~200곳"},
+  t2:  {price:34800, guar:24, thanks:110000, label:"201~400곳"},
+  t3:  {price:39800, guar:12, thanks:40000,  label:"701~1000곳"},
+};
+const CAC = {off:600000, on:150000};
+const FIXED = 10000 + 10000 + 20000; // 체험P + 전환보너스 + 마이크
+
+const ids = ["leads","apply","install","first","active","paid","kf","churn","gm"];
+const fmt = n => Math.round(n).toLocaleString("ko-KR");
+const won = n => "₩" + fmt(n);
+
+function read(){
+  const g = id => parseFloat(document.getElementById(id).value);
+  return {
+    leads:g("leads"), apply:g("apply")/100, install:g("install")/100,
+    first:g("first")/100, active:g("active")/100, paid:g("paid")/100,
+    kf:g("kf"), churn:g("churn")/100, gm:g("gm")/100,
+    tier:document.getElementById("tier").value,
+    channel:document.getElementById("channel").value,
+    invite:document.getElementById("invite").value,
+  };
+}
+
+function acqCost(tierKey, channel, invite){
+  const t = TIERS[tierKey];
+  const thanks = invite==="yes" ? t.thanks : 0;
+  return CAC[channel] + thanks + FIXED;
+}
+
+function verdict(payback, guar){
+  if(payback <= guar*0.7) return {cls:"good", txt:"🟢 건전"};
+  if(payback <= guar)     return {cls:"warn", txt:"🟡 주의"};
+  return {cls:"bad", txt:"🔴 기간초과"};
+}
+
+function render(){
+  const s = read();
+  // labels
+  document.getElementById("leads_v").textContent = fmt(s.leads)+"곳";
+  document.getElementById("apply_v").textContent = (s.apply*100).toFixed(0)+"%";
+  document.getElementById("install_v").textContent = (s.install*100).toFixed(0)+"%";
+  document.getElementById("first_v").textContent = (s.first*100).toFixed(0)+"%";
+  document.getElementById("active_v").textContent = (s.active*100).toFixed(0)+"%";
+  document.getElementById("paid_v").textContent = (s.paid*100).toFixed(0)+"%";
+  document.getElementById("kf_v").textContent = s.kf.toFixed(2);
+  document.getElementById("churn_v").textContent = (s.churn*100).toFixed(1)+"%";
+  document.getElementById("gm_v").textContent = (s.gm*100).toFixed(0)+"%";
+
+  // funnel
+  const stages = [
+    ["리드", s.leads],
+    ["체험 신청", s.leads*s.apply],
+    ["설치", s.leads*s.apply*s.install],
+    ["첫 요약", s.leads*s.apply*s.install*s.first],
+    ["40분 활성", s.leads*s.apply*s.install*s.first*s.active],
+    ["유료전환", s.leads*s.apply*s.install*s.first*s.active*s.paid],
+  ];
+  const max = stages[0][1];
+  document.getElementById("funnel").innerHTML = stages.map(([n,v])=>
+    `<div class="funnel-row"><div class="funnel-label">${n}</div>
+     <div class="funnel-bar" style="width:${Math.max(2,v/max*100)}%">${fmt(v)}</div></div>`).join("");
+
+  const paid = stages[5][1];
+  const ret = paid / (1 - s.kf);               // 재초대 증폭
+  document.getElementById("r_paid").textContent = fmt(paid)+"곳";
+  document.getElementById("r_ret").textContent = fmt(ret)+"곳";
+  document.getElementById("r_ret_s").textContent = "증폭 ×"+(1/(1-s.kf)).toFixed(2);
+
+  const goalEl = document.getElementById("r_goal");
+  const gap = ret - 1000;
+  goalEl.textContent = (gap>=0?"달성":fmt(-gap)+"곳 부족");
+  goalEl.className = "v " + (gap>=0?"good":(ret>=700?"warn":"bad"));
+  document.getElementById("r_goal_s").textContent = (ret/1000*100).toFixed(0)+"% 도달";
+
+  // unit economics (selected path)
+  const t = TIERS[s.tier];
+  const cost = acqCost(s.tier, s.channel, s.invite);
+  const contrib = t.price * s.gm;
+  const payback = cost / contrib;
+  const ltv = contrib / s.churn;              // 기대수명 = 1/이탈
+  const ltvcac = ltv / cost;
+
+  document.getElementById("u_cac").textContent = won(cost);
+  document.getElementById("u_cac_s").textContent =
+    "CAC "+won(CAC[s.channel])+(s.invite==="yes"?" +감사P "+won(t.thanks):"")+" +고정 "+won(FIXED);
+  document.getElementById("u_contrib").textContent = won(contrib)+"/월";
+  document.getElementById("u_contrib_s").textContent = "월"+fmt(t.price)+" × "+(s.gm*100).toFixed(0)+"%";
+
+  const vd = verdict(payback, t.guar);
+  const pb = document.getElementById("u_payback");
+  pb.textContent = payback.toFixed(1)+"개월";
+  pb.className = "v "+vd.cls;
+  document.getElementById("u_payback_s").innerHTML =
+    "보장 "+t.guar+"개월 · <span class='pill "+vd.cls+"'>"+vd.txt+"</span>";
+
+  const lc = document.getElementById("u_ltvcac");
+  lc.textContent = ltvcac.toFixed(2)+"×";
+  lc.className = "v "+(ltvcac>=3?"good":ltvcac>=1.5?"warn":"bad");
+  document.getElementById("u_ltvcac_s").textContent = "LTV "+won(ltv);
+
+  // matrix: all tiers × both channels (invite=yes, worst case)
+  const rows=[];
+  for(const tk of Object.keys(TIERS)){
+    for(const ch of ["off","on"]){
+      const tt=TIERS[tk], c=acqCost(tk,ch,"yes"), ctr=tt.price*s.gm, pbk=c/ctr;
+      const v=verdict(pbk,tt.guar);
+      rows.push(`<tr><td>${tt.label} · ${ch==="off"?"오프라인":"온라인"}</td>
+        <td>${won(c)}</td><td>${won(ctr)}</td><td>${pbk.toFixed(1)}</td>
+        <td>${tt.guar}개월</td><td><span class="pill ${v.cls}">${v.txt}</span></td></tr>`);
+    }
+  }
+  document.querySelector("#matrix tbody").innerHTML = rows.join("");
+}
+
+const PRESETS = {
+  challenge:{leads:7500,apply:25,install:80,first:80,active:60,paid:40,kf:0.28,churn:3,gm:70},
+  conserv:  {leads:7500,apply:20,install:60,first:80,active:50,paid:30,kf:0.18,churn:4,gm:65},
+};
+function applyPreset(name){
+  const p=PRESETS[name];
+  for(const k in p) document.getElementById(k).value=p[k];
+  render();
+}
+
+ids.forEach(id=>document.getElementById(id).addEventListener("input",render));
+["tier","channel","invite"].forEach(id=>document.getElementById(id).addEventListener("change",render));
+applyPreset("challenge");
+</script>
+</body>
+</html>
