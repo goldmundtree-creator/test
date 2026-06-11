@@ -91,8 +91,8 @@
       <input type="range" id="churn" min="1" max="8" step="0.5"></div>
     <div class="ctrl"><label>매출총이익률 <span class="val" id="gm_v"></span></label>
       <input type="range" id="gm" min="40" max="90" step="5"></div>
-    <div class="ctrl"><label>포인트 실원가 (원/P) <span class="val" id="prate_v"></span></label>
-      <input type="range" id="prate" min="0" max="1" step="0.05"></div>
+    <div class="ctrl"><label>포인트 실원가 (= 1−매총이익률) <span class="val" id="prate_v"></span></label>
+      <div class="note" style="margin-top:2px">포인트는 서비스로만 소진 → 실제 현금유출은 COGS분뿐. 매출총이익률에 자동 연동.</div></div>
 
     <h2>획득 경로</h2>
     <div class="ctrl"><label>선도 도입 구간</label>
@@ -175,7 +175,7 @@ const PTS_FIXED = 10000 + 10000; // 체험P + 전환보너스 (포인트 단위)
 const AVG_THANKS = 96000;        // 감사P 구간가중 평균 (96,000,000P ÷ 1,000곳, §16.2)
 const AVG_PRICE = 36300;         // 가격 구간가중 평균 (§15.1: 200@29.8k+300@34.8k+500@39.8k)
 
-const ids = ["leads","apply","install","first","active","paid","kf","churn","gm","prate","offshare","invshare"];
+const ids = ["leads","apply","install","first","active","paid","kf","churn","gm","offshare","invshare"];
 const fmt = n => Math.round(n).toLocaleString("ko-KR");
 const won = n => "₩" + fmt(n);
 
@@ -184,7 +184,7 @@ function read(){
   return {
     leads:g("leads"), apply:g("apply")/100, install:g("install")/100,
     first:g("first")/100, active:g("active")/100, paid:g("paid")/100,
-    kf:g("kf"), churn:g("churn")/100, gm:g("gm")/100, prate:g("prate"),
+    kf:g("kf"), churn:g("churn")/100, gm:g("gm")/100, prate:1 - g("gm")/100,
     offshare:g("offshare")/100, invshare:g("invshare")/100,
     tier:document.getElementById("tier").value,
     channel:document.getElementById("channel").value,
@@ -311,8 +311,8 @@ function render(){
 }
 
 const PRESETS = {
-  challenge:{leads:7500,apply:25,install:80,first:80,active:60,paid:40,kf:0.28,churn:3,gm:70,prate:0.7,offshare:17,invshare:60},
-  conserv:  {leads:7500,apply:20,install:60,first:80,active:50,paid:30,kf:0.18,churn:4,gm:65,prate:0.7,offshare:25,invshare:55},
+  challenge:{leads:7500,apply:25,install:80,first:80,active:60,paid:40,kf:0.28,churn:3,gm:70,offshare:17,invshare:60},
+  conserv:  {leads:7500,apply:20,install:60,first:80,active:50,paid:30,kf:0.18,churn:4,gm:65,offshare:25,invshare:55},
 };
 function applyPreset(name){
   const p=PRESETS[name];
